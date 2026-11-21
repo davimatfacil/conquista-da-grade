@@ -50,6 +50,7 @@ h1{font-family:var(--display);font-weight:800;font-size:30px;line-height:1.05;ma
 .tab{font:inherit;font-weight:700;padding:10px 4px;border-radius:10px;border:2px solid var(--ink);background:var(--card);color:var(--ink);cursor:pointer;min-height:46px}
 .tab.on{background:var(--ink);color:var(--paper)}
 .card{background:var(--card);border:2px solid var(--ink);border-radius:16px;padding:16px;box-shadow:4px 4px 0 var(--ink);display:grid;gap:12px}
+#top{display:grid;gap:10px}
 .eyebrow{margin:0;color:var(--muted);font-weight:700;font-size:15px}
 .big{font-family:var(--display);font-weight:800;font-size:76px;line-height:1}
 .big span{font-size:42px;color:var(--paint);margin-left:2px}
@@ -108,8 +109,16 @@ p{margin:0}
 /* Mercadinho: tira do preço */
 .tira{display:grid;gap:4px}
 .tira-row{display:grid;gap:4px}
-.tb{border:2px solid var(--ink);border-radius:8px;padding:14px 2px;text-align:center;font-weight:700;background:var(--card);font-variant-numeric:tabular-nums}
-.tb.disc{background:var(--paint);border-color:var(--ink);color:#16254a}
+.tb{border:2px solid var(--ink);border-radius:10px;padding:6px 2px 4px;text-align:center;background:var(--card);display:grid;justify-items:center}
+.tb small{font-size:12px;font-weight:700;color:var(--muted)}
+.tb input{font-family:var(--display);font-weight:800;font-size:24px;width:100%;max-width:60px;text-align:center;border:0;border-bottom:2px solid var(--ink);background:transparent;color:var(--ink);border-radius:0;padding:2px 0}
+.tb.good{border-color:var(--good)}
+.tb.disc{background:var(--paint);color:#16254a}
+.tb.disc small,.tb.disc input{color:#16254a;border-bottom-color:#16254a}
+.step{margin-top:2px}
+.note{font-size:15px;font-weight:700}
+.note.good{color:var(--good)}
+.note.bad{color:var(--bad)}
 .tira-cap{font-size:15px;color:var(--muted)}
 
 .legend{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:15px}
@@ -232,7 +241,6 @@ p{margin:0}
       <div class="rows" id="rows"></div>
       <div class="grid" id="grid"></div>
     </div>
-    <div class="tira" id="tira" hidden></div>
     <p class="legend" id="legend" hidden><i class="sq"></i> 1 quadradinho = 1% · a grade toda = 100%</p>
     <div class="bar" id="bar"></div>
     <div class="msg" id="msg" role="status" aria-live="polite" hidden></div>
@@ -269,16 +277,21 @@ p{margin:0}
   var DECK = [5,10,10,20,25,25,50,75];
   // Mercadinho: preço em reais e desconto. Escolhidos para a parte (100/desconto) dividir o preço certinho.
   var ITENS = [
-    {nome:'as rodas',  preco:20, desc:50},
-    {nome:'a tinta',   preco:40, desc:25},
-    {nome:'os faróis', preco:50, desc:10},
-    {nome:'os vidros', preco:30, desc:20}
+    {frase:'Vamos ao mercado comprar as rodas.',          por:'pelas rodas',  preco:20, desc:50},
+    {frase:'Agora vamos comprar a tinta.',                por:'pela tinta',   preco:40, desc:25},
+    {frase:'Agora vamos comprar os faróis.',              por:'pelos faróis', preco:50, desc:10},
+    {frase:'Por último, vamos comprar os vidros.',        por:'pelos vidros', preco:30, desc:20}
   ];
 
   function blank(){ return Array(100).fill(0); }
   function newM(){ return {i:0, phase:'predict', cells:blank(), guess:null, tries:0, end:false, pts:0}; }
   function newC(){ return {cells:blank(), card:0, phase:'draw', guess:null, turn:0, pts:0}; }
-  function newD(){ return {i:0, phase:'bloco', tries:0, end:false, pts:0}; }
+  // Estado de uma compra: o que a criança escreveu, o que já está certo e as dicas
+  function freshD(i, pts){
+    return {i:i, end:false, pts:pts, phase:'play', tries:0, sq:[], desc:'', pago:'',
+            ok:{sq:false, desc:false, pago:false}, hint:{sq:'', desc:'', pago:''}};
+  }
+  function newD(){ return freshD(0, 0); }
 
   // help guarda o progresso da história: só sobe, nunca desce (m = missões feitas, c = Conquista, d = Mercadinho)
   var S = {
@@ -488,51 +501,52 @@ p{margin:0}
     return '';
   }
 
-  // Mercadinho: a tira é o preço (100%) dividida em partes iguais; o desconto é 1 parte
+  // Mercadinho: tudo na mesma tela, em sequência: história, tira de quadrados e as 3 perguntas
+  function fieldNote(key){
+    var D = S.D;
+    if(D.ok[key]) return '<p class="note good">Certo!</p>';
+    return D.hint[key] ? '<p class="note bad">' + D.hint[key] + '</p>' : '';
+  }
+
   function topD(){
     var D = S.D, f = esc(S.names.friend);
     if(D.end){
       return '<p class="eyebrow">Mercadinho · compras feitas</p><h2 class="head">Material completo!</h2>' +
         '<p>Você usou desconto em todas as compras e fez ' + D.pts + ' pontos. O carrinho do ' + f + ' ficou pronto.</p>';
     }
-    var it = ITENS[D.i], n = 100 / it.desc, bloco = it.preco / n;
-    var tag = 'Compra ' + (D.i + 1) + ' de ' + ITENS.length + ' · ' + it.nome;
-    var head = '<p class="eyebrow">' + tag + '</p>' + bigMoney(it.preco) +
-      '<p>Desconto de <b>' + it.desc + '%</b>. A tira abaixo é o preço todo (100%), dividido em ' + n + ' partes iguais. Cada parte vale ' + it.desc + '%.</p>';
-    if(D.phase === 'bloco'){
-      return head + '<div class="ask"><label for="in">Quanto vale cada parte, em reais?</label>' +
-        '<input id="in" type="text" inputmode="numeric" autocomplete="off" maxlength="3">' +
-        '<button class="btn" type="button" data-act="pay">Confirmar</button></div>';
+    var it = ITENS[D.i], n = 100 / it.desc, bloco = it.preco / n, paga = it.preco - bloco;
+    var tag = 'Compra ' + (D.i + 1) + ' de ' + ITENS.length;
+    if(D.phase === 'ok'){
+      return '<p class="eyebrow">' + tag + ' · feita</p>' + bigMoney(paga) +
+        '<p>Você pagou R$ ' + paga + ' em vez de R$ ' + it.preco + ' e economizou R$ ' + bloco + '.</p>';
     }
-    if(D.phase === 'pagar'){
-      return head + '<p>O desconto é 1 parte, a laranja. Quanto você paga por ' + it.nome + '?</p>' +
-        '<div class="ask"><label for="in">Eu pago (em reais)</label>' +
-        '<input id="in" type="text" inputmode="numeric" autocomplete="off" maxlength="3">' +
-        '<button class="btn" type="button" data-act="pay">Confirmar</button></div>';
+    var cols = Math.min(n, 5), sq = '';
+    for(var j = 0; j < n; j++){
+      var v = D.sq[j] == null ? '' : D.sq[j];
+      sq += '<div class="tb' + (D.ok.sq ? ' good' : '') + (D.ok.sq && j === 0 ? ' disc' : '') + '"><small>R$</small>' +
+        '<input class="sq-in" type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off" maxlength="3" data-j="' + j + '" value="' + esc(v) + '"' +
+        (D.ok.sq ? ' readonly' : '') + ' aria-label="Valor da parte ' + (j + 1) + ', em reais"></div>';
     }
-    return '<p class="eyebrow">Compra feita · ' + it.nome + '</p>' + bigMoney(it.preco - bloco) +
-      '<p>Você pagou R$ ' + (it.preco - bloco) + ' em vez de R$ ' + it.preco + ' e economizou R$ ' + bloco + '.</p>';
+    function field(id, key, label){
+      return '<div class="ask"><label for="' + id + '">' + label + '</label>' +
+        '<input id="' + id + '" type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off" maxlength="3" value="' + esc(D[key]) + '"' +
+        (D.ok[key] ? ' readonly' : '') + '></div>' + fieldNote(key);
+    }
+    return '<p class="eyebrow">' + tag + '</p>' +
+      '<h2 class="head">' + it.frase + '</h2>' + bigMoney(it.preco) +
+      '<p>Tem <b>desconto de ' + it.desc + '%</b>. O preço todo (100%) foi dividido em ' + n + ' partes iguais, e cada parte vale ' + it.desc + '%.</p>' +
+      '<p class="step"><b>1)</b> Escreva em cada quadrado quanto vale essa parte, em reais.</p>' +
+      '<div class="tira-row" style="grid-template-columns:repeat(' + cols + ',1fr)">' + sq + '</div>' +
+      fieldNote('sq') +
+      field('d-desc', 'desc', '<b>2)</b> Quanto é o desconto, em reais?') +
+      field('d-pago', 'pago', '<b>3)</b> Quanto você paga ' + it.por + '?');
   }
 
   function barD(){
     var D = S.D;
     if(D.end) return '<button class="btn" type="button" data-act="goM">Voltar às Missões</button><button class="btn ghost" type="button" data-act="restart">Comprar de novo</button>';
     if(D.phase === 'ok') return '<button class="btn" type="button" data-act="nextD">' + (D.i === ITENS.length - 1 ? 'Ver resultado' : 'Próxima compra') + '</button>';
-    return '';
-  }
-
-  function renderTira(){
-    var el = $('#tira');
-    var D = S.D;
-    if(S.mode !== 'mercadinho' || D.end){ el.innerHTML = ''; return; }
-    var it = ITENS[D.i], n = 100 / it.desc, html = '<div class="tira-row" style="grid-template-columns:repeat(' + n + ',1fr)">';
-    for(var j = 0; j < n; j++){
-      var disc = (D.phase !== 'bloco' && j === 0);
-      html += '<div class="tb' + (disc ? ' disc' : '') + '">' + it.desc + '%</div>';
-    }
-    html += '</div><p class="tira-cap">Preço todo: R$ ' + it.preco + ' = ' + n + ' partes de ' + it.desc + '%.' +
-      (D.phase !== 'bloco' ? ' A parte laranja é o desconto.' : '') + '</p>';
-    el.innerHTML = html;
+    return '<button class="btn" type="button" data-act="confere">Conferir</button>';
   }
 
   // Garante a grade quadrada mesmo em celulares antigos que não entendem aspect-ratio
@@ -554,16 +568,14 @@ p{margin:0}
     $('#top').innerHTML = m === 'missoes' ? topM() : (m === 'conquista' ? topC() : topD());
     $('#bar').innerHTML = m === 'missoes' ? barM() : (m === 'conquista' ? barC() : barD());
     $('#board').hidden = (m === 'mercadinho');
-    $('#tira').hidden = (m !== 'mercadinho');
     $('#legend').hidden = (m === 'mercadinho') || !(S.seen || m === 'conquista');
     $('#cntLabel').hidden = (m === 'mercadinho');
     $('#cnt').checked = S.count;
     $('#confirm').hidden = true;
-    renderTira();
     renderStory();
     paintGrid();
     fitGrid();
-    var inp = $('#in');
+    var inp = $('#in') || (m === 'mercadinho' ? $('#top input:not([readonly])') : null);
     if(inp && focus) inp.focus({preventScroll:true});
   }
 
@@ -645,32 +657,38 @@ p{margin:0}
       else say('Faltam ' + ans + '%: 100 − ' + t + ' = ' + ans + '.', 'info');
       C.phase = 'draw'; render(true);
     },
-    pay: function(){
-      var v = readNum(); if(v === null) return;
+    confere: function(){
       var D = S.D, it = ITENS[D.i], n = 100 / it.desc, bloco = it.preco / n, paga = it.preco - bloco;
-      if(D.phase === 'bloco'){
-        if(v === bloco){
-          D.pts += (D.tries === 0 ? 2 : 1); D.tries = 0; D.phase = 'pagar';
-          say('Isso! Cada parte vale R$ ' + bloco + '.', 'good');
-        } else {
-          D.tries += 1;
-          say('Ainda não. R$ ' + it.preco + ' dividido em ' + n + ' partes iguais: quanto dá cada parte?', 'warn');
+      if(!D.ok.sq){
+        var empty = 0, wrong = 0;
+        for(var j = 0; j < n; j++){
+          var t = D.sq[j];
+          if(t == null || t === '') empty++; else if(+t !== bloco) wrong++;
         }
+        if(!empty && !wrong){ D.ok.sq = true; D.hint.sq = ''; }
+        else D.hint.sq = empty ? 'Preencha todos os quadrados. Todas as partes são iguais.'
+                               : 'Ainda não. R$ ' + it.preco + ' dividido em ' + n + ' partes iguais: quanto dá cada parte?';
+      }
+      if(!D.ok.desc){
+        if(D.desc !== '' && +D.desc === bloco){ D.ok.desc = true; D.hint.desc = ''; }
+        else D.hint.desc = D.desc === '' ? 'Escreva o valor do desconto.'
+                                         : 'Ainda não. O desconto de ' + it.desc + '% é 1 parte da tira. Quanto vale 1 parte?';
+      }
+      if(!D.ok.pago){
+        if(D.pago !== '' && +D.pago === paga){ D.ok.pago = true; D.hint.pago = ''; }
+        else D.hint.pago = D.pago === '' ? 'Escreva quanto você paga.' : 'Ainda não. Você paga o preço menos o desconto.';
+      }
+      if(D.ok.sq && D.ok.desc && D.ok.pago){
+        D.pts += (D.tries === 0 ? 4 : 2); D.phase = 'ok'; say('Isso mesmo!', 'good');
       } else {
-        if(v === paga){
-          D.pts += (D.tries === 0 ? 2 : 1); D.phase = 'ok';
-          say('Isso mesmo!', 'good');
-        } else {
-          D.tries += 1;
-          say('Ainda não. Se o desconto é 1 parte de R$ ' + bloco + ', o preço cai quanto?', 'warn');
-        }
+        D.tries += 1; say('Confira os campos que ainda não estão marcados como certos.', 'warn');
       }
       render(true);
     },
     nextD: function(){
       var D = S.D;
       if(D.i === ITENS.length - 1){ D.end = true; S.help.d = true; }
-      else { D.i += 1; D.phase = 'bloco'; D.tries = 0; }
+      else S.D = freshD(D.i + 1, D.pts);
       say('', 'info'); render(true);
     },
     restart: function(){
@@ -697,9 +715,25 @@ p{margin:0}
     var b = e.target.closest('[data-act]');
     if(b && acts[b.dataset.act]) acts[b.dataset.act]();
   });
+  card.addEventListener('input', function(e){
+    if(S.mode !== 'mercadinho') return;
+    var t = e.target, D = S.D;
+    var v = String(t.value).replace(/\D/g, '').slice(0, 3);
+    if(t.value !== v) t.value = v;
+    if(t.classList.contains('sq-in')) D.sq[+t.dataset.j] = v;
+    else if(t.id === 'd-desc') D.desc = v;
+    else if(t.id === 'd-pago') D.pago = v;
+  });
   card.addEventListener('keydown', function(e){
+    var t = e.target;
+    if(e.key === 'Enter' && S.mode === 'mercadinho' && t.closest && t.closest('#top') && t.tagName === 'INPUT'){
+      e.preventDefault();
+      var all = [].slice.call($('#top').querySelectorAll('input:not([readonly])')), k = all.indexOf(t);
+      if(k >= 0 && k < all.length - 1) all[k + 1].focus(); else acts.confere();
+      return;
+    }
     if(e.key === 'Enter' && e.target.id === 'in'){
-      var b = card.querySelector('[data-act="guess"],[data-act="falta"],[data-act="pay"]');
+      var b = card.querySelector('[data-act="guess"],[data-act="falta"]');
       if(b) b.click();
     }
   });
